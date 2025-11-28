@@ -1,0 +1,5 @@
+{
+  "name": "Snake NEOM - Cyberpunk Edition",
+  "description": "A high-fidelity, cyberpunk-themed Snake game featuring a neon-blue aesthetic, synthesized audio effects, and a responsive grid-based engine built with React and Canvas.",
+  "requestFramePermissions": []
+}
