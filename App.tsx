@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useSnakeGame } from './hooks/useSnakeGame';
 import GameBoard from './components/GameBoard';
 import GameControls from './components/GameControls';
 import Button from './components/Button';
-import { GameStatus } from './types';
+import { GameStatus, Direction } from './types';
 import { audioManager } from './utils/audio';
 import { Volume2, VolumeX, Play, RotateCcw, Pause } from 'lucide-react';
 
@@ -19,6 +19,8 @@ const App: React.FC = () => {
   } = useSnakeGame();
 
   const [soundEnabled, setSoundEnabled] = useState(true);
+  const [highScoreAnim, setHighScoreAnim] = useState(false);
+  const touchStartRef = useRef<{ x: number, y: number } | null>(null);
 
   const toggleSound = () => {
     const newState = !soundEnabled;
@@ -26,8 +28,55 @@ const App: React.FC = () => {
     audioManager.toggle(newState);
   };
 
+  // Trigger high score animation when it increases
+  useEffect(() => {
+    if (gameState.highScore > 0) {
+      setHighScoreAnim(true);
+      const timer = setTimeout(() => setHighScoreAnim(false), 800);
+      return () => clearTimeout(timer);
+    }
+  }, [gameState.highScore]);
+
+  // Touch Handlers for Swipe
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartRef.current = {
+      x: e.touches[0].clientX,
+      y: e.touches[0].clientY
+    };
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (!touchStartRef.current) return;
+
+    const touchEnd = {
+      x: e.changedTouches[0].clientX,
+      y: e.changedTouches[0].clientY
+    };
+
+    const dx = touchEnd.x - touchStartRef.current.x;
+    const dy = touchEnd.y - touchStartRef.current.y;
+    const absDx = Math.abs(dx);
+    const absDy = Math.abs(dy);
+
+    // Minimum swipe distance
+    if (Math.max(absDx, absDy) > 30) {
+      if (absDx > absDy) {
+        // Horizontal
+        changeDirection(dx > 0 ? Direction.RIGHT : Direction.LEFT);
+      } else {
+        // Vertical
+        changeDirection(dy > 0 ? Direction.DOWN : Direction.UP);
+      }
+    }
+    touchStartRef.current = null;
+  };
+
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-[#020617] text-cyan-500 overflow-hidden relative">
+    <div 
+      className="min-h-screen flex items-center justify-center p-4 bg-[#020617] text-cyan-500 overflow-hidden relative touch-none"
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+    >
       
       {/* Background Ambient Glows */}
       <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-cyan-500/10 blur-[120px] rounded-full pointer-events-none" />
@@ -58,7 +107,8 @@ const App: React.FC = () => {
           <GameBoard 
             snake={snake} 
             food={food} 
-            status={gameState.status} 
+            status={gameState.status}
+            score={gameState.score}
           />
           
           {/* Overlays */}
@@ -96,9 +146,9 @@ const App: React.FC = () => {
 
         {/* Dashboard / Stats */}
         <div className="w-full grid grid-cols-2 gap-4">
-          <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-800 flex flex-col items-center justify-center">
+          <div className={`bg-slate-900/50 p-3 rounded-lg border border-slate-800 flex flex-col items-center justify-center transition-all duration-300 ${highScoreAnim ? 'ring-2 ring-yellow-400/50 shadow-[0_0_20px_rgba(250,204,21,0.3)] bg-yellow-900/20' : ''}`}>
              <span className="text-[10px] uppercase text-slate-500 tracking-widest">High Score</span>
-             <span className="text-xl text-yellow-400 font-mono shadow-yellow-500/20 drop-shadow-sm">
+             <span className={`text-xl font-mono transition-all duration-300 ${highScoreAnim ? 'text-yellow-300 scale-110' : 'text-yellow-400'} shadow-yellow-500/20 drop-shadow-sm`}>
                {gameState.highScore.toString().padStart(4, '0')}
              </span>
           </div>
@@ -139,6 +189,10 @@ const App: React.FC = () => {
           
           {/* Spacer to balance the left buttons for centering controls */}
           <div className="w-12"></div>
+        </div>
+        
+        <div className="text-[10px] text-slate-600 uppercase tracking-widest text-center">
+          Swipe to Move • Keyboard Arrows/WASD Supported
         </div>
 
       </div>

@@ -12,10 +12,51 @@ interface GameBoardProps {
   snake: Coordinate[];
   food: Coordinate;
   status: GameStatus;
+  score: number;
 }
 
-const GameBoard: React.FC<GameBoardProps> = ({ snake, food, status }) => {
+interface Particle {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  life: number;
+  color: string;
+  size: number;
+}
+
+const GameBoard: React.FC<GameBoardProps> = ({ snake, food, status, score }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const particlesRef = useRef<Particle[]>([]);
+  const prevScoreRef = useRef<number>(score);
+  const prevFoodRef = useRef<Coordinate>(food);
+
+  // Trigger explosion when score increases
+  useEffect(() => {
+    if (score > prevScoreRef.current) {
+      // Spawn particles at the OLD food location
+      const cx = prevFoodRef.current.x * GRID_SIZE + GRID_SIZE / 2;
+      const cy = prevFoodRef.current.y * GRID_SIZE + GRID_SIZE / 2;
+
+      for (let i = 0; i < 20; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const speed = Math.random() * 3 + 1; // Random speed
+        const isPink = Math.random() > 0.5;
+        
+        particlesRef.current.push({
+          x: cx,
+          y: cy,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed,
+          life: 1.0, // 100% life
+          color: isPink ? '#f472b6' : '#06b6d4', // Pink or Cyan
+          size: Math.random() * 3 + 1
+        });
+      }
+    }
+    prevScoreRef.current = score;
+    prevFoodRef.current = food;
+  }, [score, food]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -28,9 +69,9 @@ const GameBoard: React.FC<GameBoardProps> = ({ snake, food, status }) => {
       // 1. Clear & Background
       ctx.clearRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
       
-      // 2. Draw Grid
-      ctx.strokeStyle = COLOR_GRID;
-      ctx.lineWidth = 1;
+      // 2. Draw Grid (Refined, thinner)
+      ctx.strokeStyle = 'rgba(30, 41, 59, 0.3)'; // Very subtle slate
+      ctx.lineWidth = 0.5; // Fine lines
       
       ctx.beginPath();
       for (let i = 0; i <= GRID_COUNT; i++) {
@@ -43,7 +84,27 @@ const GameBoard: React.FC<GameBoardProps> = ({ snake, food, status }) => {
       }
       ctx.stroke();
 
-      // 3. Draw Snake
+      // 3. Update & Draw Particles
+      if (particlesRef.current.length > 0) {
+        // Filter out dead particles
+        particlesRef.current = particlesRef.current.filter(p => p.life > 0);
+        
+        particlesRef.current.forEach(p => {
+          p.x += p.vx;
+          p.y += p.vy;
+          p.life -= 0.03; // Fade out speed
+          p.size *= 0.95; // Shrink
+
+          ctx.globalAlpha = Math.max(0, p.life);
+          ctx.fillStyle = p.color;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+          ctx.fill();
+        });
+        ctx.globalAlpha = 1;
+      }
+
+      // 4. Draw Snake
       ctx.shadowBlur = 15;
       ctx.shadowColor = COLOR_NEON_BLUE;
       ctx.fillStyle = COLOR_NEON_BLUE;
@@ -63,7 +124,7 @@ const GameBoard: React.FC<GameBoardProps> = ({ snake, food, status }) => {
       });
       ctx.globalAlpha = 1;
 
-      // 4. Draw Food
+      // 5. Draw Food
       if (status !== GameStatus.IDLE) {
         ctx.shadowBlur = 20;
         ctx.shadowColor = '#f472b6'; // Pinkish glow for food
@@ -94,23 +155,23 @@ const GameBoard: React.FC<GameBoardProps> = ({ snake, food, status }) => {
   }, [snake, food, status]);
 
   return (
-    <div className="relative p-1 rounded-xl bg-gradient-to-b from-cyan-900/50 to-slate-900/50 border border-cyan-500/30 shadow-[0_0_40px_rgba(6,182,212,0.15)]">
+    <div className="relative p-1 rounded-xl bg-gradient-to-b from-cyan-900/40 to-slate-900/40 border border-cyan-500/20 shadow-[0_0_40px_rgba(6,182,212,0.1)]">
        {/* Corner Accents */}
-      <div className="absolute -top-1 -left-1 w-6 h-6 border-t-2 border-l-2 border-cyan-400 rounded-tl-lg" />
-      <div className="absolute -top-1 -right-1 w-6 h-6 border-t-2 border-r-2 border-cyan-400 rounded-tr-lg" />
-      <div className="absolute -bottom-1 -left-1 w-6 h-6 border-b-2 border-l-2 border-cyan-400 rounded-bl-lg" />
-      <div className="absolute -bottom-1 -right-1 w-6 h-6 border-b-2 border-r-2 border-cyan-400 rounded-br-lg" />
+      <div className="absolute -top-1 -left-1 w-6 h-6 border-t-2 border-l-2 border-cyan-400/60 rounded-tl-lg" />
+      <div className="absolute -top-1 -right-1 w-6 h-6 border-t-2 border-r-2 border-cyan-400/60 rounded-tr-lg" />
+      <div className="absolute -bottom-1 -left-1 w-6 h-6 border-b-2 border-l-2 border-cyan-400/60 rounded-bl-lg" />
+      <div className="absolute -bottom-1 -right-1 w-6 h-6 border-b-2 border-r-2 border-cyan-400/60 rounded-br-lg" />
 
       <canvas
         ref={canvasRef}
         width={CANVAS_SIZE}
         height={CANVAS_SIZE}
-        className="block bg-slate-950/80 rounded-lg max-w-full h-auto cursor-crosshair"
+        className="block bg-slate-950/90 rounded-lg max-w-full h-auto cursor-crosshair"
         style={{ imageRendering: 'pixelated' }}
       />
       
-      {/* Scanline Effect Overlay */}
-      <div className="absolute inset-0 pointer-events-none rounded-lg bg-[linear-gradient(transparent_50%,rgba(0,0,0,0.25)_50%)] bg-[length:100%_4px] opacity-20" />
+      {/* Scanline Effect Overlay - refined */}
+      <div className="absolute inset-0 pointer-events-none rounded-lg bg-[linear-gradient(transparent_50%,rgba(0,0,0,0.2)_50%)] bg-[length:100%_3px] opacity-30" />
     </div>
   );
 };
